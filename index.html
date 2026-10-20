@@ -224,6 +224,7 @@ kbd { font-family: var(--font-mono); font-size: 0.8rem; border: 1px solid var(--
   function finish() {
     won = true;
     clearInterval(timerId);
+    draw(); // lift the fog to reveal the whole maze
     const t = elapsed().toFixed(1);
     $('time').textContent = t + '초';
     $('winStats').textContent = `${DIFF[diff].name} 레벨 ${level} · ${t}초 · ${moves}번 이동`;
@@ -283,7 +284,6 @@ kbd { font-family: var(--font-mono); font-size: 0.8rem; border: 1px solid var(--
     ctx.rect(0, 0, total, total);
     ctx.arc(px, py, r, 0, Math.PI * 2, true);
     ctx.fillStyle = token('--fg');
-    ctx.globalAlpha = 0.94;
     ctx.fill('evenodd');
     // soft edge inside the circle: a transparent-to-fog gradient in the fog colour
     const fog = token('--fg');
