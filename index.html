@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; font-size: 14px; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>산울타리 미로</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one centered play column — header, stat strip, square board, controls. Hedge-garden palette. */
+:root {
+  --bg: #eef0e6;
+  --surface: #f8f9f2;
+  --fg: #1f2a1c;
+  --muted: #5d6b57;
+  --hedge: #2f5a2a;
+  --path: #e3dcc6;
+  --trail: #c9bd95;
+  --player: #c2412d;
+  --goal: #d9a521;
+  --line: #cfd4c2;
+  --mane: #b5561c;
+  --mane-dark: #7e3610;
+  --lion-face: #f1b84a;
+  --muzzle: #fbe6b8;
+  --lion-ink: #3a2410;
+  --font-display: "Gowun Batang", "Batang", serif;
+  --font-body: "IBM Plex Sans KR", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141a13; --surface: #1c241a; --fg: #e6ebdc; --muted: #9aa890;
+    --hedge: #6fa25f; --path: #24301f; --trail: #4a5a36; --player: #f06a4f; --goal: #f2c14b; --line: #33402e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141a13; --surface: #1c241a; --fg: #e6ebdc; --muted: #9aa890;
+  --hedge: #6fa25f; --path: #24301f; --trail: #4a5a36; --player: #f06a4f; --goal: #f2c14b; --line: #33402e;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px;
+  box-sizing: border-box;
+}
+.wrap { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--font-display); font-size: 1.9rem; margin: 0; text-wrap: balance; color: var(--hedge); }
+.sub { color: var(--muted); font-size: 0.9rem; margin: 0; }
+.diff { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 4px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.diff button { border: 1px solid transparent; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px; }
+.diff button small { font: 400 0.72rem var(--font-body); color: var(--muted); }
+.diff button[aria-checked="true"] { background: var(--hedge); color: var(--bg); }
+.diff button[aria-checked="true"] small { color: var(--bg); opacity: 0.8; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.stat { padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; }
+.stat + .stat { border-left: 1px solid var(--line); }
+.stat .k { font-size: 0.72rem; letter-spacing: 0.06em; color: var(--muted); }
+.stat .v { font-family: var(--font-mono); font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.board { position: relative; width: 100%; aspect-ratio: 1; max-width: 100%; }
+canvas { width: 100%; height: 100%; display: block; border-radius: 6px; touch-action: none; background: var(--path); }
+.overlay {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  background: color-mix(in srgb, var(--bg) 86%, transparent); border-radius: 6px; text-align: center; padding: 16px;
+}
+.overlay h2 { font-family: var(--font-display); font-size: 2rem; margin: 0; color: var(--hedge); }
+.overlay p { margin: 0; color: var(--muted); font-family: var(--font-mono); }
+.controls { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+button {
+  font: 600 0.95rem var(--font-body); color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; cursor: pointer;
+}
+button:hover { border-color: var(--hedge); }
+button:focus-visible { outline: 2px solid var(--player); outline-offset: 2px; }
+button.primary { background: var(--hedge); color: var(--bg); border-color: var(--hedge); }
+.pad { display: grid; grid-template-columns: repeat(3, 48px); grid-template-rows: repeat(2, 48px); gap: 6px; }
+.pad button { padding: 0; font-size: 1.1rem; }
+.pad .up { grid-column: 2; }
+.pad .left { grid-column: 1; grid-row: 2; }
+.pad .down { grid-column: 2; grid-row: 2; }
+.pad .right { grid-column: 3; grid-row: 2; }
+.help { color: var(--muted); font-size: 0.85rem; margin: 0; }
+kbd { font-family: var(--font-mono); font-size: 0.8rem; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; background: var(--surface); }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>산울타리 미로</h1>
+    <p class="sub">사자를 금빛 출구까지 데려가세요</p>
+  </header>
+
+  <div class="diff" role="radiogroup" aria-label="난이도">
+    <button role="radio" data-diff="easy" id="diffEasy">초급<small>8칸부터</small></button>
+    <button role="radio" data-diff="normal" id="diffNormal">중급<small>15칸부터</small></button>
+    <button role="radio" data-diff="hard" id="diffHard">상급<small>22칸 · 안개</small></button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><span class="k">레벨</span><span class="v" id="level">1</span></div>
+    <div class="stat"><span class="k">시간</span><span class="v" id="time">0.0초</span></div>
+    <div class="stat"><span class="k">이동</span><span class="v" id="moves">0</span></div>
+  </div>
+
+  <div class="board">
+    <canvas id="maze" aria-label="미로 게임판"></canvas>
+    <div class="overlay" id="win" hidden>
+      <h2>탈출 성공!</h2>
+      <p id="winStats"></p>
+      <button class="primary" id="nextBtn">다음 레벨 →</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="buttons">
+      <button id="newBtn">새 미로</button>
+      <button id="resetBtn">레벨 1부터</button>
+      <button id="faceBtn">얼굴 사진 넣기</button>
+      <button id="faceClear" hidden>사자로 돌아가기</button>
+      <input type="file" id="faceInput" accept="image/*" hidden>
+    </div>
+    <div class="pad" aria-label="방향 버튼">
+      <button class="up" data-dir="up" aria-label="위">▲</button>
+      <button class="left" data-dir="left" aria-label="왼쪽">◀</button>
+      <button class="down" data-dir="down" aria-label="아래">▼</button>
+      <button class="right" data-dir="right" aria-label="오른쪽">▶</button>
+    </div>
+  </div>
+  <p class="help">조작: <kbd>←↑↓→</kbd> 또는 <kbd>WASD</kbd>, 휴대폰은 게임판을 밀거나 방향 버튼을 누르세요. 레벨이 오를수록 미로가 커집니다.</p>
+</div>
+
+<script>
+(() => {
+  const N = 1, E = 2, S = 4, W = 8;
+  const DIRS = {
+    up: { bit: N, dx: 0, dy: -1 }, right: { bit: E, dx: 1, dy: 0 },
+    down: { bit: S, dx: 0, dy: 1 }, left: { bit: W, dx: -1, dy: 0 },
+  };
+  const OPP = { [N]: S, [S]: N, [E]: W, [W]: E };
+
+  const canvas = document.getElementById('maze');
+  const ctx = canvas.getContext('2d');
+  const $ = id => document.getElementById(id);
+
+  // start: first-level size, step: growth per level, fog: visible radius in cells (0 = no fog)
+  const DIFF = {
+    easy: { name: '초급', start: 8, step: 2, max: 20, fog: 0 },
+    normal: { name: '중급', start: 15, step: 3, max: 32, fog: 0 },
+    hard: { name: '상급', start: 22, step: 4, max: 40, fog: 3.5 },
+  };
+  let diff = 'normal';
+  try { const d = localStorage.getItem('maze-diff'); if (DIFF[d]) diff = d; } catch (e) {}
+
+  let level = 1, size, cells, player, trail, moves, startTime, timerId, won;
+
+  // Recursive-backtracker maze: each cell stores open passages as a bitmask.
+  function generate(n) {
+    const grid = new Uint8Array(n * n);
+    const seen = new Uint8Array(n * n);
+    const stack = [[0, 0]];
+    seen[0] = 1;
+    while (stack.length) {
+      const [x, y] = stack[stack.length - 1];
+      const options = Object.values(DIRS).filter(d => {
+        const nx = x + d.dx, ny = y + d.dy;
+        return nx >= 0 && ny >= 0 && nx < n && ny < n && !seen[ny * n + nx];
+      });
+      if (!options.length) { stack.pop(); continue; }
+      const d = options[Math.floor(Math.random() * options.length)];
+      const nx = x + d.dx, ny = y + d.dy;
+      grid[y * n + x] |= d.bit;
+      grid[ny * n + nx] |= OPP[d.bit];
+      seen[ny * n + nx] = 1;
+      stack.push([nx, ny]);
+    }
+    return grid;
+  }
+
+  function newMaze() {
+    const cfg = DIFF[diff];
+    size = Math.min(cfg.start + (level - 1) * cfg.step, cfg.max);
+    document.querySelectorAll('.diff button').forEach(b => b.setAttribute('aria-checked', b.dataset.diff === diff));
+    cells = generate(size);
+    player = { x: 0, y: 0 };
+    trail = new Set(['0,0']);
+    moves = 0; won = false; startTime = null;
+    clearInterval(timerId);
+    $('level').textContent = level;
+    $('moves').textContent = 0;
+    $('time').textContent = '0.0초';
+    $('win').hidden = true;
+    draw();
+  }
+
+  function elapsed() { return startTime ? (performance.now() - startTime) / 1000 : 0; }
+
+  function move(dir) {
+    if (won) return;
+    const d = DIRS[dir];
+    if (!(cells[player.y * size + player.x] & d.bit)) return;
+    if (!startTime) {
+      startTime = performance.now();
+      timerId = setInterval(() => { $('time').textContent = elapsed().toFixed(1) + '초'; }, 100);
+    }
+    player.x += d.dx; player.y += d.dy;
+    trail.add(player.x + ',' + player.y);
+    moves++;
+    $('moves').textContent = moves;
+    draw();
+    if (player.x === size - 1 && player.y === size - 1) finish();
+  }
+
+  function finish() {
+    won = true;
+    clearInterval(timerId);
+    const t = elapsed().toFixed(1);
+    $('time').textContent = t + '초';
+    $('winStats').textContent = `${DIFF[diff].name} 레벨 ${level} · ${t}초 · ${moves}번 이동`;
+    $('win').hidden = false;
+    $('nextBtn').focus();
+  }
+
+  function token(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const total = rect.width;
+    const wall = Math.max(2, Math.min(6, total / size / 5));
+    const pad = wall / 2;
+    const c = (total - wall) / size;
+
+    ctx.fillStyle = token('--path');
+    ctx.fillRect(0, 0, total, total);
+
+    ctx.fillStyle = token('--trail');
+    trail.forEach(k => {
+      const [x, y] = k.split(',').map(Number);
+      ctx.fillRect(pad + x * c, pad + y * c, c, c);
+    });
+
+    drawHedges(pad, c, wall);
+    drawFog(pad, c, total);
+
+    // goal stays visible through the fog so the player knows the direction
+    const gx = pad + (size - 1) * c + c / 2, gy = pad + (size - 1) * c + c / 2;
+    ctx.fillStyle = token('--goal');
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 ? c * 0.16 : c * 0.36;
+      const a = -Math.PI / 2 + i * Math.PI / 5;
+      ctx.lineTo(gx + r * Math.cos(a), gy + r * Math.sin(a));
+    }
+    ctx.closePath(); ctx.fill();
+
+    // player: uploaded face photo in a circle, or the lion
+    drawPlayer(pad, c);
+  }
+
+  function drawFog(pad, c, total) {
+    const radius = DIFF[diff].fog;
+    if (!radius || won) return;
+    const px = pad + player.x * c + c / 2, py = pad + player.y * c + c / 2;
+    const r = radius * c;
+    ctx.save();
+    // solid fog everywhere outside the lantern circle
+    ctx.beginPath();
+    ctx.rect(0, 0, total, total);
+    ctx.arc(px, py, r, 0, Math.PI * 2, true);
+    ctx.fillStyle = token('--fg');
+    ctx.globalAlpha = 0.94;
+    ctx.fill('evenodd');
+    // soft edge inside the circle: a transparent-to-fog gradient in the fog colour
+    const fog = token('--fg');
+    const g = ctx.createRadialGradient(px, py, r * 0.55, px, py, r);
+    const [fr, fg, fb] = [1, 3, 5].map(i => parseInt(fog.slice(i, i + 2), 16));
+    g.addColorStop(0, `rgba(${fr},${fg},${fb},0)`);
+    g.addColorStop(1, `rgba(${fr},${fg},${fb},1)`);
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawHedges(pad, c, wall) {
+    ctx.strokeStyle = token('--hedge');
+    ctx.lineWidth = wall;
+    ctx.lineCap = 'square';
+    ctx.beginPath();
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const v = cells[y * size + x];
+        const x0 = pad + x * c, y0 = pad + y * c;
+        if (!(v & N)) { ctx.moveTo(x0, y0); ctx.lineTo(x0 + c, y0); }
+        if (!(v & W)) { ctx.moveTo(x0, y0); ctx.lineTo(x0, y0 + c); }
+        if (y === size - 1 && !(v & S)) { ctx.moveTo(x0, y0 + c); ctx.lineTo(x0 + c, y0 + c); }
+        if (x === size - 1 && !(v & E)) { ctx.moveTo(x0 + c, y0); ctx.lineTo(x0 + c, y0 + c); }
+      }
+    }
+    ctx.stroke();
+  }
+
+  function drawPlayer(pad, c) {
+    const px = pad + player.x * c + c / 2, py = pad + player.y * c + c / 2;
+    if (face) {
+      const r = c * 0.42;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(face, px - r, py - r, r * 2, r * 2);
+      ctx.restore();
+      ctx.strokeStyle = token('--player');
+      ctx.lineWidth = Math.max(1.5, r * 0.12);
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      drawLion(px, py, c * 0.46);
+    }
+  }
+
+  // Lion face drawn on the canvas, scaled to the cell (r = mane radius).
+  function drawLion(x, y, r) {
+    const ink = token('--lion-ink');
+    const circle = (cx, cy, rr, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.fill(); };
+
+    // mane: spiky ring, dark layer under light layer
+    [[r, '--mane-dark', 0], [r * 0.9, '--mane', Math.PI / 14]].forEach(([outer, col, rot]) => {
+      ctx.fillStyle = token(col);
+      ctx.beginPath();
+      for (let i = 0; i < 28; i++) {
+        const rr = i % 2 ? outer * 0.78 : outer;
+        const a = rot + i * Math.PI / 14;
+        ctx.lineTo(x + rr * Math.cos(a), y + rr * Math.sin(a));
+      }
+      ctx.closePath(); ctx.fill();
+    });
+
+    // ears
+    circle(x - r * 0.42, y - r * 0.42, r * 0.17, token('--lion-face'));
+    circle(x + r * 0.42, y - r * 0.42, r * 0.17, token('--lion-face'));
+    circle(x - r * 0.42, y - r * 0.42, r * 0.08, token('--mane-dark'));
+    circle(x + r * 0.42, y - r * 0.42, r * 0.08, token('--mane-dark'));
+
+    // face and muzzle
+    circle(x, y + r * 0.03, r * 0.56, token('--lion-face'));
+    circle(x - r * 0.15, y + r * 0.25, r * 0.2, token('--muzzle'));
+    circle(x + r * 0.15, y + r * 0.25, r * 0.2, token('--muzzle'));
+
+    // eyes with highlights
+    circle(x - r * 0.21, y - r * 0.1, r * 0.09, ink);
+    circle(x + r * 0.21, y - r * 0.1, r * 0.09, ink);
+    if (r > 8) {
+      circle(x - r * 0.18, y - r * 0.13, r * 0.03, token('--muzzle'));
+      circle(x + r * 0.24, y - r * 0.13, r * 0.03, token('--muzzle'));
+    }
+
+    // nose
+    ctx.fillStyle = ink;
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.11, y + r * 0.08);
+    ctx.lineTo(x + r * 0.11, y + r * 0.08);
+    ctx.lineTo(x, y + r * 0.2);
+    ctx.closePath(); ctx.fill();
+
+    // mouth
+    if (r > 8) {
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = Math.max(1, r * 0.05);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x, y + r * 0.2); ctx.lineTo(x, y + r * 0.3);
+      ctx.moveTo(x, y + r * 0.3); ctx.quadraticCurveTo(x - r * 0.08, y + r * 0.38, x - r * 0.15, y + r * 0.32);
+      ctx.moveTo(x, y + r * 0.3); ctx.quadraticCurveTo(x + r * 0.08, y + r * 0.38, x + r * 0.15, y + r * 0.32);
+      ctx.stroke();
+    }
+  }
+
+  // Face photo: cropped to a centered square, shrunk, and remembered in this browser only.
+  let face = null;
+  const FACE_KEY = 'maze-face';
+  function setFace(src, save) {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(img.width, img.height);
+      const off = document.createElement('canvas');
+      off.width = off.height = 256;
+      off.getContext('2d').drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 256, 256);
+      const url = off.toDataURL('image/jpeg', 0.85);
+      const small = new Image();
+      small.onload = () => { face = small; $('faceClear').hidden = false; draw(); };
+      small.src = url;
+      if (save) { try { localStorage.setItem(FACE_KEY, url); } catch (e) {} }
+    };
+    img.src = src;
+  }
+  $('faceBtn').addEventListener('click', () => $('faceInput').click());
+  $('faceInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setFace(reader.result, true);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  });
+  $('faceClear').addEventListener('click', () => {
+    face = null;
+    $('faceClear').hidden = true;
+    try { localStorage.removeItem(FACE_KEY); } catch (e) {}
+    draw();
+  });
+  try { const saved = localStorage.getItem(FACE_KEY); if (saved) setFace(saved, false); } catch (e) {}
+
+  const KEYS = {
+    ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+    w: 'up', s: 'down', a: 'left', d: 'right', W: 'up', S: 'down', A: 'left', D: 'right',
+  };
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && won) { e.preventDefault(); next(); return; }
+    const dir = KEYS[e.key];
+    if (dir) { e.preventDefault(); move(dir); }
+  });
+
+  document.querySelectorAll('.pad button').forEach(b => b.addEventListener('click', () => move(b.dataset.dir)));
+
+  let touch = null;
+  canvas.addEventListener('pointerdown', e => { touch = { x: e.clientX, y: e.clientY }; });
+  canvas.addEventListener('pointermove', e => {
+    if (!touch) return;
+    const dx = e.clientX - touch.x, dy = e.clientY - touch.y;
+    const step = Math.max(14, canvas.getBoundingClientRect().width / size * 0.6);
+    if (Math.abs(dx) < step && Math.abs(dy) < step) return;
+    move(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+    touch = { x: e.clientX, y: e.clientY };
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => canvas.addEventListener(t, () => { touch = null; }));
+
+  function next() { level++; newMaze(); }
+  $('nextBtn').addEventListener('click', next);
+  $('newBtn').addEventListener('click', newMaze);
+  document.querySelectorAll('.diff button').forEach(b => b.addEventListener('click', () => {
+    diff = b.dataset.diff;
+    try { localStorage.setItem('maze-diff', diff); } catch (e) {}
+    level = 1;
+    newMaze();
+  }));
+  $('resetBtn').addEventListener('click', () => { level = 1; newMaze(); });
+
+  new ResizeObserver(() => cells && draw()).observe(canvas);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => draw());
+  new MutationObserver(() => draw()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  if (document.fonts) document.fonts.ready.then(() => draw());
+
+  newMaze();
+})();
+</script>
+
+</html>
